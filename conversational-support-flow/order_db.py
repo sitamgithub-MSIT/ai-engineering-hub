@@ -43,9 +43,9 @@ class Order:
     tracking: list[TrackingEvent] = field(default_factory=list)
 
     @property
-    def latest_event(self) -> TrackingEvent:
-        """The latest tracking event for the order."""
-        return self.tracking[-1]
+    def latest_event(self) -> TrackingEvent | None:
+        """The latest tracking event for the order, or None if there are none yet."""
+        return self.tracking[-1] if self.tracking else None
 
 
 def _init_db() -> None:

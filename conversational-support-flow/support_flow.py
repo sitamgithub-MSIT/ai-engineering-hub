@@ -2,6 +2,7 @@
 
 import logging
 import os
+import re
 
 from crewai import Agent, Crew, Flow, LLM, Process, Task
 from crewai.experimental.conversational import (
@@ -48,9 +49,10 @@ POLICY_EMBEDDER = {
 
 def extract_order_id(text: str) -> str | None:
     """Pull a known order id out of free text, e.g. "Where is order 4471?" -> "4471"."""
-    for token in text.replace("?", " ").replace(",", " ").split():
-        # digit check first (cheap) before hitting the DB (one query per digit token)
-        if token.isdigit() and ORDER_SERVICE.get_order(token) is not None:
+    # pull digit runs regardless of surrounding punctuation ("4471." / "(4471)")
+    for token in re.findall(r"\d+", text):
+        # cheap digit match first, then confirm against the DB
+        if ORDER_SERVICE.get_order(token) is not None:
             return token
     return None
 
@@ -110,6 +112,11 @@ class SupportFlow(Flow[SupportState]):
     @listen("ORDER_LOOKUP")
     def handle_order_lookup(self) -> str:
         """Status, tracking, or delivery date for an order."""
+        # DEMO SIMPLIFICATION: the order id comes straight from the user's
+        # message and get_order() has no customer scope, so any known id
+        # resolves. A production build must scope the lookup to an
+        # authenticated customer (self.state.customer_id) and return this
+        # same "not found" reply for both unknown and unauthorized orders.
         message = self.state.current_user_message or ""
         order_id = extract_order_id(message) or self.state.last_order_id
         order = ORDER_SERVICE.get_order(order_id)
@@ -123,7 +130,12 @@ class SupportFlow(Flow[SupportState]):
                 word in message.lower()
                 for word in ("arrive", "here", "yet", "come", "delivered")
             )
-            if is_arrival_followup:
+            # no tracking scans yet -> fall back to status + shipment date
+            status_reply = (
+                f"Order {order.order_id} is {order.status}. "
+                f"It shipped on {order.shipped:%b %d} via {order.carrier}."
+            )
+            if is_arrival_followup and latest is not None:
                 if order.status == "delivered":
                     reply = (
                         f"Yes — order {order.order_id} was delivered on "
@@ -136,10 +148,7 @@ class SupportFlow(Flow[SupportState]):
                         f"{latest.date:%b %d})."
                     )
             else:
-                reply = (
-                    f"Order {order.order_id} is {order.status}. "
-                    f"It shipped on {order.shipped:%b %d} via {order.carrier}."
-                )
+                reply = status_reply
 
         self.append_assistant_message(reply)
         return reply
@@ -240,9 +249,8 @@ class SupportFlow(Flow[SupportState]):
             )
             reply = result.raw
         except Exception:
-            logger.exception(
-                "Research crew failed for message: %s", self.state.current_user_message
-            )
+            # don't log the user's message -- it may carry personal details
+            logger.exception("Research crew failed")
             reply = "I couldn't pull up live information on that right now -- could you try again shortly?"
 
         self.append_assistant_message(reply)
