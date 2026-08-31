@@ -19,7 +19,7 @@ We use:
 3. The matched route handles the turn:
    - **ORDER_LOOKUP**: deterministic lookup against the order database (status, carrier, tracking, delivery date); no agent
    - **RETURN_POLICY**: a single agent Crew runs real RAG over the return policy knowledge base and answers in plain language
-   - **RESEARCH**: a two agent Crew (researcher plus communicator) uses Exa web search for live conditions (carrier delays, weather) and rewrites the findings for the customer
+   - **RESEARCH**: a two-agent Crew (researcher plus communicator) uses Exa web search for live conditions (carrier delays, weather) and rewrites the findings for the customer
    - **converse**: a plain conversational reply for everything else, answered from history when possible
 4. Conversation state (last order id, message history) persists across turns within a session, so pronouns and follow-ups resolve ("Has that arrived yet?", "What was the order number again?")
 5. The flow streams over AG-UI to the custom chat UI (built on CopilotKit's runtime) in the browser
